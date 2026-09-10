@@ -12,7 +12,7 @@ lychee 组装的 abliterated 版模型（NVFP4 专家量化 + PLE 线性注意�
 
 | # | 根因 | 修复 |
 |---|------|------|
-| 1 | L35 rogue `weight_scale` 键（BF16 [12288,1]，index 无记录）流入未量化 QKV 融合模块 | `fixes/orca_repair.py` 剥离 rogue 键，反量化为正确 e4m3 × per-row scale |
+| 1 | L35 rogue `weight_scale` 键（BF16 [12288,1]，index 无记录）流入未量化 QKV 融合模块 | `fixes/orca_repair.py` 反量化为 BF16（e4m3 网格值 × 逐行 scale → BF16 原值），删除 rogue scale 键；该层 config 未声明量化，引擎按普通 BF16 Linear 构建 |
 | 2 | MTP 层零量化声明 + 1536 个 input_scale 键缺失，引擎按未量化 FusedMoE 构建，NVFP4 scale 无处落 | `fixes/orca_fix2.py` 抄 h47 的 6 条 mtp 声明 + 回填 input_scale |
 | 3 | **weight_scale_2 存成倒数** `2688/amax`（应为 `amax/2688`），73728 个标量膨胀 5 亿倍 → logits NaN | `fixes/fix3.py` 原位 4 字节补丁翻转全部 73728 个 scale_2 |
 | 4 | **主模型 73728 个专家 input_scale 标量键整体缺失**，FLASHINFER_CUTLASS 后端拿未初始化内存当激活 scale | `fixes/fix5.py` 从 h47 提取并注入全部 73728 个标量 |
