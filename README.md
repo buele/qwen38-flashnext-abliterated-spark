@@ -6,13 +6,26 @@
 
 ## 成果
 
+**质量与功能**（修复前 → 修复后）：
+
 | 指标 | lychee 原版在单台 Spark | 改造后 |
 |------|------------------------|--------|
 | 推理输出 | 垃圾（无限重复 token） | 中文/英文/数学/多轮/工具调用全部正常 |
 | logprobs | NaN | 48 值全部有限 |
-| MTP 投机解码接受率 | 0% | 54.9%（平均接受长度 2.65） |
-| 流式 TTFT | — | 0.3s |
+| MTP 投机解码 | 加载后接受率 0% | 生效，接受率 27-62%（负载相关），平均接受长度 1.8-2.9 |
 | 运行形态 | — | 单台 Spark，8000 端口对外服务 |
+
+**性能基准**（单台 DGX Spark GB10，vLLM mmap，on-box 回环实测，`validate/bench_orca.py` 可复现）：
+
+| 指标 | 数值 | 备注 |
+|------|------|------|
+| TTFT（首个思考 token） | ~345 ms | 短 prompt，5 次中位数 |
+| TTFT（首个正文 token） | ~2.4 s | 模型默认开 thinking，先烧 ~14 token 再出正文 |
+| 单流解码 | 21.8-23.8 tok/s | 384 token 连续生成 |
+| Prefill | ~1,700 tok/s | 1979-token prompt |
+| 4 路并发 | 56-61 tok/s 聚合 | 4 × 384 token |
+
+注：正文 TTFT 的 2.4s 不是引擎慢——prefill 345ms 就出第一个 token，2.4s 是思考链的固有开销；部署侧用 `chat_template_kwargs={"enable_thinking":false}` 可关。
 
 ## 为什么原版在单台 Spark 上是坏的
 
@@ -55,6 +68,7 @@ diagnosis/   诊断链（症状 → 根因的证据收集）
 validate/    端到端验证
              restart-validate.sh  清缓存 → 重启 → health → 5 项质量探针总控
              orca-val.py           质量/TTFT/MTP 接受率/logprobs 探针
+             bench_orca.py         性能基准：TTFT/单流解码/prefill/并发吞吐
              recon.sh/recon_check.py 重启前预检（缓存状态、修复完整性）
 launch/      部署启动
              orca-trial-8000.sh  单台 Spark 启动器（vLLM mmap v2 recipe）
