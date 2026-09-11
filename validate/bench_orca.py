@@ -78,10 +78,11 @@ for i in range(3):
     dec.append({"tok": r["ctoks"], "gen_s": gen_time, "tok_s": tps, "finish": r["finish"]})
     print(f"decode run{i+1}: {r['ctoks']} tok in {gen_time:.1f}s gen = {tps:.1f} tok/s (finish={r['finish']})", flush=True)
 
-# ---- 3) prefill throughput: ~5k tok prompt, 3 runs ----
+# ---- 3) prefill throughput: ~5k tok prompt, 3 runs (salted to defeat prefix cache) ----
 pre = []
 for i in range(3):
-    r = post_stream(PROMPT_PREFILL, 256)
+    p = LONG_TEXT + f"\n\n（第{i}组，校验码{i*7919}）请用一句话总结上面的内容。"
+    r = post_stream(p, 256)
     first = r["t_think"] or r["t_content"] or 0
     pre_tps = r["ptoks"] / first if first else 0
     pre.append({"ptoks": r["ptoks"], "ttft_ms": first*1000, "prefill_tok_s": pre_tps})

@@ -15,17 +15,33 @@
 | MTP 投机解码 | 加载后接受率 0% | 生效，接受率 27-62%（负载相关），平均接受长度 1.8-2.9 |
 | 运行形态 | — | 单台 Spark，8000 端口对外服务 |
 
-**性能基准**（单台 DGX Spark GB10，vLLM mmap，on-box 回环实测，`validate/bench_orca.py` 可复现）：
+**性能基准**（单台 DGX Spark GB10，vLLM mmap，on-box 回环实测，`validate/bench_orca.py` 可复现；测量前先跑一遍热身 pass 消化 JIT/autotune）：
 
 | 指标 | 数值 | 备注 |
 |------|------|------|
 | TTFT（首个思考 token） | ~345 ms | 短 prompt，5 次中位数 |
-| TTFT（首个正文 token） | ~2.4 s | 模型默认开 thinking，先烧 ~14 token 再出正文 |
-| 单流解码 | 21.8-23.8 tok/s | 384 token 连续生成 |
-| Prefill | ~1,700 tok/s | 1979-token prompt |
-| 4 路并发 | 56-61 tok/s 聚合 | 4 × 384 token |
+| TTFT（首个正文 token） | ~2.3-3.1 s | 模型默认开 thinking，先烧 ~14 token 再出正文 |
+| 单流解码 | 19-24 tok/s | 区间值：MTP 接受率随内容波动（0.35-0.62），本模型解码速度强内容相关 |
+| Prefill | ~1,600-1,700 tok/s | ~2000-token prompt |
+| 4 路并发 | 47-61 tok/s 聚合 | 4 × 384 token |
 
-注：正文 TTFT 的 2.4s 不是引擎慢——prefill 345ms 就出第一个 token，2.4s 是思考链的固有开销；部署侧用 `chat_template_kwargs={"enable_thinking":false}` 可关。
+**部署调优记录**（详见下节）：有效的是 KV 池 7G→15G（KV 842k token = 3.2×262k 并发余量，消除 4 路并发时 KV 96.7% 满导致的 64s 排队）；无效或有害的尝试也如实记录。
+
+### 调优过程与参考对照
+
+对照社区已知较优的单台 Spark 部署方案（stock 量化版，单流 ~28-37 tok/s）逐项排查，结论：
+
+| 尝试 | 结果 | 说明 |
+|------|------|------|
+| KV 池 7G→15G + GMU 0.70→0.78 | **有效** | 4 路并发 KV 占用 96.7%→21.8%，排队延迟消除 |
+| 全 CPU（去掉 10 核 cpuset 限制）+ OMP 16 | 无效果 | PLE gather 并非 CPU 瓶颈，已回退 |
+| 覆盖 cudagraph_capture_sizes | **有害** | 覆盖了镜像默认的完整编译配置，prefill 大 chunk 退化为 eager 执行，已回退 |
+| MTP draft head 词表缩减（FR-Spec，参考方案 +25% 单流） | **不可用** | 本镜像 vLLM 构建无此支持（grep 实证） |
+| SSM/GDN 状态 bf16（参考方案 +7%） | **不可用** | 同上 |
+
+与参考方案的单流差距（~22 vs ~28-37）主要来自后两项引擎级功能缺失 + 参考方测量条件（stock 权重、内容相关的 MTP 接受率上限）。在不动镜像的前提下，部署级旋钮已调到最优。
+
+注：正文 TTFT 的 2.3-3.1s 不是引擎慢——prefill 345ms 就出第一个 token，之后是思考链的固有开销；部署侧用 `chat_template_kwargs={"enable_thinking":false}` 可关（实测思考 0 token、正文直接出）。
 
 ## 为什么原版在单台 Spark 上是坏的
 
