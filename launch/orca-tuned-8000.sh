@@ -46,7 +46,7 @@ docker run -d --name "$NAME" --gpus all --ipc=host \
   -e MALLOC_TRIM_THRESHOLD_=131072 \
   --entrypoint vllm "$IMAGE" serve "$MODEL_DIR" \
   --port 8000 \
-  --served-model-name aeon-uncensored \
+  --served-model-name aeon-uncensored anthropic/claude-sonnet-4 anthropic/claude-sonnet-4.5 google/gemini-3.1-flash-lite-preview \
   --api-key "$API_KEY" \
   --distributed-executor-backend mp \
   --gpu-memory-utilization 0.78 \

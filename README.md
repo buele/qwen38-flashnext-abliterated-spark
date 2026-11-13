@@ -88,7 +88,13 @@ validate/    端到端验证
              recon.sh/recon_check.py 重启前预检（缓存状态、修复完整性）
 launch/      部署启动
              orca-trial-8000.sh  单台 Spark 启动器（vLLM mmap v2 recipe）
+             orca-tuned-8000.sh  同上 + KV 7G→15G / GMU 0.78 / 模型别名（现网配置）
+             orca-trial-8001.sh  同配方换端口跑第二实例
+             flashnext-ple.sh    运行中 PLE 表预热（不重启，逐页 touch）
+             flashnext-stop.sh / flashnext-view.sh
              launch-orca.sh / launch-flashnext.sh / vllm-stack-start.sh
+fetch/       权重拉取
+             dl_hibrid47.sh / dl_wifi_lychee.sh（源 IP 写死，换环境改 SRC 即可）
 ```
 
 ## 方法论（可复用到"多机产物 → 单机可用"的同类改造）
